@@ -1,6 +1,10 @@
 #include <Servo.h>
 #include <arduinoFFT.h>
 
+/* ============================================
+   SETTINGS
+   ============================================ */
+
 const uint16_t samples = 128;
 const double samplingFrequency = 128;
 
@@ -14,10 +18,13 @@ const int ALPHA_END   = 12;
 const int BETA_START  = 13;
 const int BETA_END    = 30;
 
+// CALCULATE BIN COUNTS FOR NORMALIZATION
+const int ALPHA_BINS = ALPHA_END - ALPHA_START + 1; // equals 5
+const int BETA_BINS  = BETA_END - BETA_START + 1;   // equals 18
 
-const double STRESS_RATIO_THRESH = 1.1; // Above this = Focus
-const double CALM_RATIO_THRESH   = 0.9; // Below this = Relax
 
+const double STRESS_RATIO_THRESH = 1.1;
+const double CALM_RATIO_THRESH   = 0.9;
 
 const int eegPin = A0;
 Servo s1, s2, s3, s4, s5;
@@ -26,7 +33,6 @@ const int OPEN_ANGLE  = 0;
 const int CLOSE_ANGLE = 180;
 int currentAngle = 90;
 String currentState = "NEUTRAL";
-
 
 unsigned long microseconds;
 unsigned int sampling_period_us;
@@ -60,14 +66,20 @@ void loop() {
   FFT.complexToMagnitude();
 
 
-  double alphaPower = 0;
-  double betaPower  = 0;
+  double alphaSum = 0;
+  double betaSum  = 0;
 
-  for (int i = ALPHA_START; i <= ALPHA_END; i++) alphaPower += vReal[i];
-  for (int i = BETA_START; i <= BETA_END; i++)   betaPower += vReal[i];
+  for (int i = ALPHA_START; i <= ALPHA_END; i++) alphaSum += vReal[i];
+  for (int i = BETA_START; i <= BETA_END; i++)   betaSum += vReal[i];
 
-  if (alphaPower < 0.1) alphaPower = 0.1;
-  double ratio = betaPower / alphaPower;
+  double alphaAvg = alphaSum / ALPHA_BINS;
+  double betaAvg  = betaSum / BETA_BINS;
+
+  if (alphaAvg < 0.1) alphaAvg = 0.1;
+
+  double ratio = betaAvg / alphaAvg;
+
+
   if (ratio >= STRESS_RATIO_THRESH) {
     if (currentAngle != CLOSE_ANGLE) {
       currentAngle = CLOSE_ANGLE;
@@ -86,10 +98,14 @@ void loop() {
     currentState = "NEUTRAL (Holding)";
   }
 
+  /* 5. DEBUGGING */
+  // Use Serial Monitor to read this clearly
   Serial.print("Ratio: ");
-  Serial.print(ratio);
-  Serial.print(" \t| Angle: ");
-  Serial.print(currentAngle);
+  Serial.print(ratio, 2); // Print only 2 decimal places
+  Serial.print(" \t| AlphaAvg: ");
+  Serial.print(alphaAvg, 1);
+  Serial.print(" \t| BetaAvg: ");
+  Serial.print(betaAvg, 1);
   Serial.print(" \t| Status: ");
   Serial.println(currentState);
 }
